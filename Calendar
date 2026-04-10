@@ -1,1 +1,683 @@
 
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChartCal — Chart-Based Calendar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&display=swap');
+        
+        :root {
+            --tw-color-primary: #00d4ff;
+        }
+        
+        * {
+            transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 8px;
+        }
+        
+        .day-cell {
+            height: 110px;
+            padding: 8px;
+            border-radius: 12px;
+            background: #1f2937;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .day-cell.today {
+            border: 2px solid #00d4ff;
+            box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.2);
+        }
+        
+        .day-cell.dragover {
+            background: #0a1428 !important;
+            border: 2px dashed #00d4ff;
+            box-shadow: 0 0 0 6px rgba(0, 212, 255, 0.3);
+            transform: scale(1.03);
+        }
+        
+        .event-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 9999px;
+            padding: 4px 12px;
+            font-size: 13px;
+            margin-top: 4px;
+            cursor: grab;
+            user-select: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        
+        .event-item:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+        
+        .event-item .dot {
+            font-size: 18px;
+            line-height: 1;
+        }
+        
+        .logo-icon {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .drop-zone {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="bg-[#0a1428] text-white font-sans">
+    <!-- NAVBAR -->
+    <nav class="bg-[#0a1428] border-b border-white/10 px-8 py-4 flex items-center justify-between sticky top-0 z-50">
+        <!-- Logo -->
+        <div class="flex items-center gap-x-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-[#00d4ff] to-[#00a3cc] rounded-2xl flex items-center justify-center text-3xl shadow-lg shadow-cyan-500/50 logo-icon">
+                📅📊
+            </div>
+            <div>
+                <span class="text-3xl font-semibold tracking-tighter" style="font-family: 'Space Grotesk', sans-serif;">ChartCal</span>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="flex items-center gap-x-8 text-sm font-medium">
+            <a href="#" onclick="switchTab(0)" class="flex items-center gap-x-1 hover:text-cyan-400">
+                <span>📊</span>
+                <span>Dashboard</span>
+            </a>
+            <a href="#" onclick="switchTab(1)" id="nav-calendar" class="flex items-center gap-x-1 text-cyan-400 border-b-2 border-cyan-400 pb-1">
+                <span>🗓️</span>
+                <span>Calendar</span>
+            </a>
+            <a href="#" onclick="switchTab(2)" class="flex items-center gap-x-1 hover:text-cyan-400">
+                <span>📈</span>
+                <span>Insights</span>
+            </a>
+            <a href="#" onclick="switchTab(3)" class="flex items-center gap-x-1 hover:text-cyan-400">
+                <span>📑</span>
+                <span>Reports</span>
+            </a>
+            <a href="#" onclick="switchTab(4)" class="flex items-center gap-x-1 hover:text-cyan-400">
+                <span>⚙️</span>
+                <span>Settings</span>
+            </a>
+        </div>
+
+        <div class="flex items-center gap-x-4">
+            <div class="relative">
+                <input type="text" id="search-input" 
+                       class="bg-white/10 border border-white/20 rounded-3xl pl-10 py-2 w-72 text-sm focus:outline-none focus:border-cyan-400 placeholder:text-white/40"
+                       placeholder="Search events or insights...">
+                <span class="absolute left-4 top-3 text-white/40">🔎</span>
+            </div>
+            
+            <div class="w-8 h-8 bg-white/10 rounded-2xl flex items-center justify-center text-xl cursor-pointer hover:bg-white/20">🛎️</div>
+            
+            <!-- User -->
+            <div class="flex items-center gap-x-2 cursor-pointer">
+                <div class="text-right">
+                    <div class="text-sm font-medium">Donna</div>
+                    <div class="text-xs text-white/50">Parañaque City</div>
+                </div>
+                <div class="w-9 h-9 bg-gradient-to-br from-pink-400 to-purple-400 rounded-2xl flex items-center justify-center text-xl">👩‍💼</div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex h-[calc(100vh-65px)]">
+        
+        <!-- MAIN CONTENT -->
+        <div class="flex-1 p-8 overflow-auto">
+            
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-4xl font-semibold tracking-tight" id="month-title">April 2026</h1>
+                    <p class="text-white/50">Drag &amp; drop events • Your productivity at a glance</p>
+                </div>
+                
+                <!-- Filters -->
+                <div class="flex items-center gap-x-3">
+                    <button onclick="filterCategory('all')" id="filter-all"
+                            class="px-5 py-2 rounded-3xl bg-white/10 hover:bg-cyan-400 hover:text-black text-sm font-medium flex items-center gap-x-2 active">
+                        <span>All</span>
+                    </button>
+                    <button onclick="filterCategory('work')" id="filter-work"
+                            class="px-5 py-2 rounded-3xl bg-white/10 hover:bg-cyan-400 hover:text-black text-sm font-medium flex items-center gap-x-2">
+                        💼 Work
+                    </button>
+                    <button onclick="filterCategory('personal')" id="filter-personal"
+                            class="px-5 py-2 rounded-3xl bg-white/10 hover:bg-cyan-400 hover:text-black text-sm font-medium flex items-center gap-x-2">
+                        🏠 Personal
+                    </button>
+                    <button onclick="filterCategory('health')" id="filter-health"
+                            class="px-5 py-2 rounded-3xl bg-white/10 hover:bg-cyan-400 hover:text-black text-sm font-medium flex items-center gap-x-2">
+                        🧘 Health
+                    </button>
+                    
+                    <button onclick="prevMonth()" class="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 text-2xl">‹</button>
+                    <button onclick="nextMonth()" class="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 text-2xl">›</button>
+                    
+                    <button onclick="goToToday()" 
+                            class="px-6 py-2 bg-cyan-400 text-black font-semibold rounded-3xl flex items-center gap-x-2 hover:shadow-lg hover:shadow-cyan-400/30">
+                        <span>Today</span>
+                        <span class="text-xl">📍</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="mb-2 grid grid-cols-7 gap-2 text-center text-xs font-medium text-white/40">
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+                <div>Sun</div>
+            </div>
+            
+            <div id="calendar-grid" class="calendar-grid text-sm"></div>
+
+            <!-- Quick Add -->
+            <div class="mt-8 flex items-center justify-between">
+                <button onclick="showQuickAdd()"
+                        class="flex items-center gap-x-3 bg-gradient-to-r from-cyan-400 to-[#00a3cc] text-black font-semibold px-8 py-4 rounded-3xl text-lg shadow-xl shadow-cyan-500/40 hover:scale-105">
+                    <span class="text-3xl leading-none">+</span>
+                    <span>Quick Add Event</span>
+                </button>
+                
+                <div onclick="explainDragDrop()" class="flex items-center gap-x-2 text-xs bg-white/10 hover:bg-white/20 px-4 py-2 rounded-3xl cursor-pointer">
+                    <span class="text-cyan-400">🖱️</span>
+                    <span>Drag &amp; drop events between days • Fully interactive</span>
+                </div>
+                
+                <div class="flex items-center gap-x-3 text-sm bg-white/10 px-6 py-3 rounded-3xl">
+                    <span class="text-emerald-400">✅ Synced with</span>
+                    <span class="flex items-center gap-x-1">📧 Google</span>
+                    <span class="flex items-center gap-x-1">📬 Outlook</span>
+                    <span class="text-white/40">•</span>
+                    <span class="text-emerald-400 text-xs font-medium">Last sync: just now</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDEBAR: INSIGHTS -->
+        <div class="w-96 bg-[#11223a] border-l border-white/10 p-8 flex flex-col overflow-auto">
+            
+            <h2 class="uppercase text-xs tracking-[1px] font-medium mb-6 text-cyan-400 flex items-center gap-x-2">
+                <span>📈 LIVE INSIGHTS</span>
+            </h2>
+
+            <!-- Weekly Hours -->
+            <div class="mb-8">
+                <div class="flex justify-between text-sm mb-4">
+                    <span class="font-medium">Weekly Hours Logged</span>
+                    <span class="text-white/50">This week • 48h total</span>
+                </div>
+                <div class="h-64">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Event Categories -->
+            <div class="mb-8">
+                <div class="flex justify-between text-sm mb-4">
+                    <span class="font-medium">Event Categories</span>
+                </div>
+                <div class="h-64 flex items-center justify-center">
+                    <canvas id="categoryChart" class="max-w-[220px]"></canvas>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-xs mt-4">
+                    <div class="flex items-center gap-x-2"><div class="w-3 h-3 bg-cyan-400 rounded"></div><span class="flex-1">Work — 48%</span></div>
+                    <div class="flex items-center gap-x-2"><div class="w-3 h-3 bg-emerald-400 rounded"></div><span class="flex-1">Personal — 32%</span></div>
+                    <div class="flex items-center gap-x-2"><div class="w-3 h-3 bg-purple-400 rounded"></div><span class="flex-1">Health — 12%</span></div>
+                    <div class="flex items-center gap-x-2"><div class="w-3 h-3 bg-amber-400 rounded"></div><span class="flex-1">Other — 8%</span></div>
+                </div>
+            </div>
+
+            <!-- Energy & Focus Trend -->
+            <div>
+                <div class="flex justify-between text-sm mb-4">
+                    <span class="font-medium">Energy &amp; Focus Trend</span>
+                    <span class="text-white/50 text-xs">Last 7 days ↑12%</span>
+                </div>
+                <div class="h-64">
+                    <canvas id="energyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="mt-auto pt-8 border-t border-white/10 text-xs text-white/40 flex justify-between items-center">
+                <div>Built as a live demo • Drag &amp; drop enabled</div>
+                <div onclick="window.location.reload()" class="cursor-pointer flex items-center gap-x-1 hover:text-cyan-400">
+                    <span>♻️</span> Refresh data
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Modal -->
+    <div onclick="if(event.target.id === 'quick-modal') hideQuickAdd()" 
+         id="quick-modal"
+         class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[9999]">
+        <div onclick="event.stopImmediatePropagation()" 
+             class="bg-[#11223a] w-full max-w-md rounded-3xl p-8">
+            <h3 class="text-2xl font-semibold mb-6">Add new event</h3>
+            
+            <div class="space-y-6">
+                <div>
+                    <label class="text-xs uppercase tracking-widest text-white/50">Title</label>
+                    <input id="modal-title" type="text" value="Team Strategy Sync" 
+                           class="w-full mt-2 bg-white/10 border border-white/20 rounded-2xl px-4 py-4 text-lg focus:outline-none focus:border-cyan-400">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs uppercase tracking-widest text-white/50">Date</label>
+                        <input id="modal-date" type="date" value="2026-04-15" 
+                               class="w-full mt-2 bg-white/10 border border-white/20 rounded-2xl px-4 py-4">
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase tracking-widest text-white/50">Time</label>
+                        <input id="modal-time" type="text" value="10:00 AM" 
+                               class="w-full mt-2 bg-white/10 border border-white/20 rounded-2xl px-4 py-4">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="text-xs uppercase tracking-widest text-white/50">Category</label>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="selectCategory(this)" class="category-btn active px-6 py-2 rounded-3xl bg-cyan-400 text-black text-sm">Work</button>
+                        <button onclick="selectCategory(this)" class="category-btn px-6 py-2 rounded-3xl bg-white/10 text-sm">Personal</button>
+                        <button onclick="selectCategory(this)" class="category-btn px-6 py-2 rounded-3xl bg-white/10 text-sm">Health</button>
+                    </div>
+                </div>
+                
+                <div class="flex gap-x-4">
+                    <button onclick="hideQuickAdd()" 
+                            class="flex-1 py-6 text-lg font-medium rounded-3xl border border-white/30 hover:bg-white/10">Cancel</button>
+                    <button onclick="addEventFromModal()" 
+                            class="flex-1 py-6 text-lg font-semibold bg-cyan-400 text-black rounded-3xl">Create Event</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tailwind script
+        function initTailwind() {
+            tailwind.config = {
+                content: [],
+                theme: {
+                    extend: {}
+                }
+            }
+        }
+
+        // Calendar data for April 2026 (April 1 is Wednesday)
+        let currentMonth = 4
+        let currentYear = 2026
+        
+        // Events with unique IDs for drag & drop
+        let events = [
+            { id: 1, date: "2026-04-04", title: "Weekend Market", time: "9 AM", category: "personal", color: "#00d4ff", duration: "4h" },
+            { id: 2, date: "2026-04-12", title: "Team Strategy Meeting", time: "10 AM", category: "work", color: "#00a3cc", duration: "2h" },
+            { id: 3, date: "2026-04-15", title: "Doctor Appointment", time: "2 PM", category: "health", color: "#22c55e", duration: "1h" },
+            { id: 4, date: "2026-04-25", title: "Project Deadline", time: "11:59 PM", category: "work", color: "#f59e0b", duration: "—" },
+            { id: 5, date: "2026-04-11", title: "Today", time: "", category: "personal", color: "#00d4ff", duration: "" }
+        ]
+
+        let nextEventId = 6
+
+        // Render calendar with draggable events
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid')
+            grid.innerHTML = ''
+            
+            // April 2026 starts on Wednesday (index 2 if Mon=0)
+            const firstDay = 2
+            const daysInMonth = 30
+            
+            // Previous month padding
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div')
+                empty.className = 'day-cell opacity-30'
+                empty.innerHTML = `<div class="text-xs text-white/30">31</div>`
+                grid.appendChild(empty)
+            }
+            
+            // Actual days
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `\( {currentYear}-0 \){currentMonth}-` + (day < 10 ? '0' : '') + day
+                
+                const cell = document.createElement('div')
+                cell.className = `day-cell hover:ring-2 hover:ring-cyan-400/50 flex flex-col`
+                cell.dataset.date = dateStr
+                
+                if (day === 11) cell.classList.add('today')
+                
+                // Day header
+                let html = `
+                    <div class="flex justify-between items-center text-xs mb-2">
+                        <span class="\( {day === 11 ? 'text-cyan-400 font-semibold' : ''}"> \){day}</span>
+                `
+                const dayEvents = events.filter(e => e.date === dateStr)
+                if (dayEvents.length) {
+                    html += `<span class="px-2 py-px text-[10px] bg-white/10 rounded-full">\( {dayEvents.length} event \){dayEvents.length > 1 ? 's' : ''}</span>`
+                }
+                html += `</div>`
+                
+                // Draggable event items
+                dayEvents.forEach(ev => {
+                    html += `
+                    <div class="event-item" draggable="true" data-event-id="${ev.id}">
+                        <span class="dot" style="color: ${ev.color}">●</span>
+                        <span class="flex-1 truncate font-medium">${ev.title}</span>
+                        \( {ev.time ? `<span class="text-xs text-white/50 whitespace-nowrap"> \){ev.time}</span>` : ''}
+                    </div>`
+                })
+                
+                cell.innerHTML = html
+                
+                // Click to view details
+                cell.onclick = (e) => {
+                    // Don't trigger if clicking on an event (which is draggable)
+                    if (!e.target.closest('.event-item')) {
+                        showDayDetail(dateStr, dayEvents)
+                    }
+                }
+                
+                // === DRAG & DROP SUPPORT ===
+                // Make cell a drop target
+                cell.ondragover = (e) => {
+                    e.preventDefault()
+                    cell.classList.add('dragover')
+                }
+                cell.ondragleave = () => {
+                    cell.classList.remove('dragover')
+                }
+                cell.ondrop = (e) => {
+                    e.preventDefault()
+                    cell.classList.remove('dragover')
+                    
+                    const eventId = parseInt(e.dataTransfer.getData('text/plain'))
+                    const event = events.find(ev => ev.id === eventId)
+                    
+                    if (event && event.date !== dateStr) {
+                        // Move the event
+                        event.date = dateStr
+                        renderCalendar()
+                        
+                        // Toast feedback
+                        showToast(`✅ Moved "${event.title}" to ${day} April`)
+                    }
+                }
+                
+                // Attach drag listeners to every event inside this cell
+                // (listeners are added after innerHTML is set)
+                setTimeout(() => {
+                    const eventElements = cell.querySelectorAll('.event-item')
+                    eventElements.forEach(el => {
+                        el.ondragstart = (e) => {
+                            e.dataTransfer.setData('text/plain', el.dataset.eventId)
+                            // Optional visual feedback
+                            setTimeout(() => {
+                                el.style.opacity = '0.4'
+                            }, 0)
+                        }
+                        el.ondragend = () => {
+                            // Reset opacity
+                            el.style.opacity = '1'
+                        }
+                    })
+                }, 10)
+                
+                grid.appendChild(cell)
+            }
+            
+            // Next month padding
+            const remaining = 35 - (firstDay + daysInMonth)
+            for (let i = 0; i < remaining; i++) {
+                const empty = document.createElement('div')
+                empty.className = 'day-cell opacity-30'
+                empty.innerHTML = `<div class="text-xs text-white/30">${i+1}</div>`
+                grid.appendChild(empty)
+            }
+        }
+
+        // Charts (unchanged - static for demo)
+        let weeklyChartInstance, categoryChartInstance, energyChartInstance
+
+        function createCharts() {
+            const weeklyCtx = document.getElementById('weeklyChart')
+            if (weeklyChartInstance) weeklyChartInstance.destroy()
+            weeklyChartInstance = new Chart(weeklyCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Hours',
+                        data: [7.5, 8.2, 6.0, 7.8, 9.1, 4.5, 5.2],
+                        backgroundColor: '#00d4ff',
+                        borderColor: '#00d4ff',
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        barThickness: 28
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: '#334155' }, ticks: { color: '#64748b', font: { size: 11 } } },
+                        x: { grid: { color: '#334155' }, ticks: { color: '#64748b', font: { size: 12 } } }
+                    }
+                }
+            })
+
+            const categoryCtx = document.getElementById('categoryChart')
+            if (categoryChartInstance) categoryChartInstance.destroy()
+            categoryChartInstance = new Chart(categoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Work', 'Personal', 'Health', 'Other'],
+                    datasets: [{
+                        data: [48, 32, 12, 8],
+                        backgroundColor: ['#00d4ff', '#22c55e', '#a855f7', '#f59e0b'],
+                        borderWidth: 0,
+                        cutout: '78%'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { backgroundColor: '#0a1428', titleColor: '#fff', bodyColor: '#fff' }
+                    }
+                }
+            })
+
+            const energyCtx = document.getElementById('energyChart')
+            if (energyChartInstance) energyChartInstance.destroy()
+            energyChartInstance = new Chart(energyCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Focus Level',
+                        data: [62, 78, 85, 71, 88, 95, 91],
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+                        tension: 0.4,
+                        borderWidth: 4,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#fff',
+                        pointBorderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 100, grid: { color: '#334155' }, ticks: { color: '#64748b', stepSize: 20 } },
+                        x: { grid: { color: '#334155' }, ticks: { color: '#64748b' } }
+                    }
+                }
+            })
+        }
+
+        // Tab switching (demo)
+        function switchTab(n) {
+            const tabs = document.querySelectorAll('nav a')
+            tabs.forEach((t, i) => {
+                if (i === n) {
+                    t.classList.add('text-cyan-400', 'border-b-2', 'border-cyan-400')
+                } else {
+                    t.classList.remove('text-cyan-400', 'border-b-2', 'border-cyan-400')
+                }
+            })
+            if (n !== 1) {
+                alert("🚀 This is a fully functional demo. In the real ChartCal app this would load the " + ["Dashboard", "Calendar", "Insights", "Reports", "Settings"][n] + " page!")
+            }
+        }
+
+        // Improved filter using dataset.date
+        let activeFilter = 'all'
+        function filterCategory(cat) {
+            activeFilter = cat
+            const cells = document.querySelectorAll('.day-cell')
+            
+            cells.forEach(cell => {
+                if (cat === 'all') {
+                    cell.style.opacity = 1
+                    return
+                }
+                
+                const dateStr = cell.dataset.date
+                const hasMatch = events.some(e => e.date === dateStr && e.category === cat)
+                cell.style.opacity = hasMatch ? 1 : 0.3
+            })
+            
+            // Toggle active class
+            document.querySelectorAll('button[id^="filter-"]').forEach(b => {
+                b.classList.remove('active', 'bg-cyan-400', 'text-black')
+            })
+            document.getElementById('filter-' + cat).classList.add('active', 'bg-cyan-400', 'text-black')
+        }
+
+        function showDayDetail(dateStr, dayEvents) {
+            if (!dayEvents || !dayEvents.length) {
+                alert(`📅 ${dateStr}\n\nNo events scheduled.\n\nDrag existing events here or use Quick Add!`)
+                return
+            }
+            let msg = `📅 ${dateStr}\n\n`
+            dayEvents.forEach(ev => {
+                msg += `• ${ev.title} \( {ev.time ? `( \){ev.time})` : ''} — ${ev.duration}\n`
+            })
+            alert(msg + "\n\n💡 Tip: You can drag this event to any other day!")
+        }
+
+        function showQuickAdd() {
+            document.getElementById('quick-modal').classList.remove('hidden')
+            document.getElementById('quick-modal').classList.add('flex')
+        }
+        
+        function hideQuickAdd() {
+            const modal = document.getElementById('quick-modal')
+            modal.classList.add('hidden')
+            modal.classList.remove('flex')
+        }
+        
+        function selectCategory(btn) {
+            document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active', 'bg-cyan-400', 'text-black'))
+            btn.classList.add('active', 'bg-cyan-400', 'text-black')
+        }
+        
+        function addEventFromModal() {
+            const title = document.getElementById('modal-title').value || "Untitled Event"
+            const date = document.getElementById('modal-date').value
+            const time = document.getElementById('modal-time').value || ""
+            
+            hideQuickAdd()
+            
+            // Add new event with unique ID
+            const newEvent = {
+                id: nextEventId++,
+                date: date,
+                title: title,
+                time: time,
+                category: "work",
+                color: "#00d4ff",
+                duration: "1h"
+            }
+            events.push(newEvent)
+            
+            renderCalendar()
+            
+            showToast(`✅ New event "${title}" added!`)
+        }
+        
+        function prevMonth() {
+            if (currentMonth === 1) { currentMonth = 12; currentYear-- } else currentMonth--
+            document.getElementById('month-title').textContent = `${new Date(currentYear, currentMonth-1).toLocaleString('default', { month: 'long' })} ${currentYear}`
+            renderCalendar()
+        }
+        
+        function nextMonth() {
+            if (currentMonth === 12) { currentMonth = 1; currentYear++ } else currentMonth++
+            document.getElementById('month-title').textContent = `${new Date(currentYear, currentMonth-1).toLocaleString('default', { month: 'long' })} ${currentYear}`
+            renderCalendar()
+        }
+        
+        function goToToday() {
+            currentMonth = 4
+            currentYear = 2026
+            document.getElementById('month-title').textContent = `April 2026`
+            renderCalendar()
+        }
+        
+        // Toast notification helper
+        function showToast(message) {
+            const toast = document.createElement('div')
+            toast.style.cssText = 'position:fixed; bottom:30px; right:30px; background:#00d4ff; color:#000; padding:16px 24px; border-radius:9999px; font-weight:600; box-shadow:0 10px 15px -3px rgb(0 212 255); z-index:99999;'
+            toast.textContent = message
+            document.body.appendChild(toast)
+            setTimeout(() => toast.remove(), 2500)
+        }
+        
+        // Demo explanation tooltip
+        function explainDragDrop() {
+            showToast("🖱️ Drag any event pill to another day • Drop to move instantly!")
+        }
+
+        // Initialize everything
+        window.onload = function() {
+            initTailwind()
+            renderCalendar()
+            createCharts()
+            
+            console.log('%c✅ ChartCal demo with DRAG & DROP loaded!', 'color:#00d4ff; font-size:15px; font-weight:600')
+            console.log('%c📅 Drag any colored event to another date in the calendar. Events update live!', 'background:#0a1428;color:#00d4ff;padding:2px 6px;border-radius:4px')
+        }
+    </script>
+</body>
+</html>
